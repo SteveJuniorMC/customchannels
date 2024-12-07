@@ -159,7 +159,17 @@
 </head>
 <body>
     <h1>IPTV Channel Manager</h1>
-    
+    <div class="login-form" id="githubAuth">
+    <h2>GitHub Authentication</h2>
+    <div class="form-group">
+        <label for="githubToken">GitHub Personal Access Token:</label>
+        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        <small>Create a token at: GitHub Settings -> Developer Settings -> Personal Access Tokens -> Tokens (classic)</small>
+        <br>
+        <small>Required scope: gist</small>
+    </div>
+    <button class="button" onclick="verifyGithubToken()">Verify Token</button>
+    </div>
     <div class="login-form" id="loginForm">
         <div class="form-group">
             <label for="username">Username:</label>
@@ -190,8 +200,15 @@
             </div>
             <button class="button danger" onclick="clearAll()">Clear All</button>
             <input type="text" class="search-box" id="searchBox" placeholder="Search channels...">
-            <button class="button" onclick="exportList()">Save Channel List</button>
+            <button class="button" onclick="saveToGist()">Save to Gist</button>
         </div>
+
+        <div id="gistInfo" style="display: none;" class="github-section">
+    <h3>Channel List Saved!</h3>
+    <p>Your channel list has been saved to a Gist. Use this URL in your TV app:</p>
+    <div class="gist-url" id="gistUrl"></div>
+    <button class="button copy-button" onclick="copyGistUrl()">Copy URL</button>
+    </div>
 
         <div class="stats" id="statsDisplay"></div>
 
