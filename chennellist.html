@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IPTV Channel Manager</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .login-form, .channel-list {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .channel-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .channel-item:hover {
+            background: #f0f0f0;
+        }
+        .channel-item.selected {
+            background: #e3f2fd;
+        }
+        .channel-checkbox {
+            margin-right: 15px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .channel-number {
+            width: 60px;
+            font-weight: bold;
+        }
+        .channel-name {
+            flex-grow: 1;
+        }
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .button.danger:hover {
+            background: #c82333;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .search-box {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+            margin-right: auto;
+        }
+        #loadingSpinner {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        .stats {
+            margin-top: 10px;
+            color: #666;
+        }
+        #debugInfo {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            word-break: break-all;
+            display: none;
+        }
+        .select-all-container {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+        .select-all-container input {
+            margin-right: 5px;
+            width: 20px;
+            height: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>IPTV Channel Manager</h1>
+    
+    <div class="login-form" id="loginForm">
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" required>
+        </div>
+        <div class="form-group">
+            <label for="url">Server URL:</label>
+            <input type="text" id="url" placeholder="e.g., domain.com or domain.com/player_api.php" required>
+        </div>
+        <button class="button" onclick="fetchChannels()">Load Channels</button>
+        <div id="debugInfo"></div>
+    </div>
+
+    <div id="loadingSpinner">
+        <div class="spinner"></div>
+        <p>Loading channels...</p>
+    </div>
+
+    <div id="channelManager" style="display: none;">
+        <div class="controls">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <label for="selectAll">Select All</label>
+            </div>
+            <button class="button danger" onclick="clearAll()">Clear All</button>
+            <input type="text" class="search-box" id="searchBox" placeholder="Search channels...">
+            <button class="button" onclick="exportList()">Save Channel List</button>
+        </div>
+
+        <div class="stats" id="statsDisplay"></div>
+
+        <div class="channel-list" id="channelList">
+            <!-- Channels will be inserted here -->
+        </div>
+    </div>
+
+    <script>
+        let channels = [];
+
+        function clearAll() {
+            channels.forEach(channel => channel.selected = false);
+            document.getElementById('selectAll').checked = false;
+            renderChannels();
+        }
+
+        async function fetchChannels() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            let baseUrl = document.getElementById('url').value.trim();
+            
+            if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+                baseUrl = 'http://' + baseUrl;
+            }
+            
+            baseUrl = baseUrl.replace(/\/$/, '');
+            
+            if (!baseUrl.endsWith('player_api.php')) {
+                baseUrl = baseUrl + '/player_api.php';
+            }
+            
+            const fullUrl = `${baseUrl}?username=${username}&password=${password}&action=get_live_streams`;
+            
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.style.display = 'block';
+            debugDiv.innerHTML = `Attempting to fetch from URL:<br>${fullUrl}`;
+            
+            document.getElementById('loadingSpinner').style.display = 'block';
+            
+            try {
+                console.log('Fetching from URL:', fullUrl);
+                const response = await fetch(fullUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!Array.isArray(data)) {
+                    throw new Error('Invalid response format - expected an array of channels');
+                }
+                
+                channels = data.map(channel => ({
+                    ...channel,
+                    selected: true  // All channels selected by default
+                }));
+                
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('selectAll').checked = true;
+                renderChannels();
+                document.getElementById('channelManager').style.display = 'block';
+                updateStats();
+            } catch (error) {
+                debugDiv.innerHTML += `<br><br>Error:<br>${error.message}`;
+                alert('Error loading channels: ' + error.message);
+            } finally {
+                document.getElementById('loadingSpinner').style.display = 'none';
+            }
+        }
+
+        function toggleSelectAll() {
+            const selectAllChecked = document.getElementById('selectAll').checked;
+            channels.forEach(channel => channel.selected = selectAllChecked);
+            renderChannels();
+        }
+
+        function updateStats() {
+            const totalChannels = channels.length;
+            const selectedChannels = channels.filter(c => c.selected).length;
+            
+            document.getElementById('statsDisplay').innerHTML = 
+                `Total Channels: ${totalChannels} | Selected: ${selectedChannels}`;
+        }
+
+        function renderChannels() {
+            const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+            const filteredChannels = channels.filter(channel => 
+                channel.name.toLowerCase().includes(searchTerm)
+            );
+            
+            const list = document.getElementById('channelList');
+            list.innerHTML = filteredChannels.map(channel => `
+                <div class="channel-item ${channel.selected ? 'selected' : ''}" data-id="${channel.stream_id}">
+                    <input type="checkbox" 
+                           class="channel-checkbox" 
+                           ${channel.selected ? 'checked' : ''}
+                           onchange="toggleChannel('${channel.stream_id}')">
+                    <span class="channel-number">${channel.num}</span>
+                    <span class="channel-name">${channel.name}</span>
+                </div>
+            `).join('');
+            
+            updateStats();
+        }
+
+        function toggleChannel(streamId) {
+            const channel = channels.find(c => c.stream_id == streamId);
+            if (channel) {
+                channel.selected = !channel.selected;
+                document.getElementById('selectAll').checked = channels.every(c => c.selected);
+                renderChannels();
+            }
+        }
+
+        function exportList() {
+            // Filter selected channels and maintain original format
+            const filteredChannels = channels
+                .filter(channel => channel.selected)
+                .map((channel, index) => ({
+                    num: index + 1,
+                    name: channel.name,
+                    stream_type: channel.stream_type,
+                    stream_id: channel.stream_id,
+                    stream_icon: channel.stream_icon,
+                    epg_channel_id: channel.epg_channel_id,
+                    added: channel.added,
+                    is_adult: channel.is_adult,
+                    category_id: channel.category_id,
+                    custom_sid: channel.custom_sid,
+                    tv_archive: channel.tv_archive,
+                    direct_source: channel.direct_source,
+                    tv_archive_duration: channel.tv_archive_duration
+                }));
+
+            const blob = new Blob([JSON.stringify(filteredChannels)], 
+                {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'custom_channels.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        if (document.getElementById('searchBox')) {
+            document.getElementById('searchBox').addEventListener('input', renderChannels);
+        }
+    </script>
+</body>
+</html>
